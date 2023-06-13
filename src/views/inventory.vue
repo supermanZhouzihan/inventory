@@ -81,6 +81,33 @@
         </template>
       </van-swipe-cell>
     </van-list>
+
+    <!-- <van-list
+      v-model="goodsLoading"
+      :finished="goodsFinished"
+      finished-text="没有更多了"
+      @load="goodsOnLoad"
+    >
+      <div v-for="item in goodsList" :key="item.goods_id">
+        <div @click="clickGoodsItem(item)">
+          <div class="listIntroItem">
+            【{{ item.goods_brand }}】 {{ item.goods_name }} （{{
+              item.goods_spec
+            }}）
+          </div>
+          <div class="listIntroItem">
+            货位:{{ item.stock_location }}，生产日期：{{
+              item.pro_date
+            }}，有效期：{{ item.shelf_life_days }}天
+          </div>
+          <div class="listIntroItem">
+            数量：整{{ item.main_num }}{{ item.main_unit }},零{{ item.sub_num
+            }}{{ item.sub_unit }}
+          </div>
+        </div>
+      </div>
+    </van-list> -->
+
     <!-- 添加、编辑商品弹窗 -->
     <van-action-sheet
       v-model="dialogShow"
@@ -198,30 +225,38 @@
     <van-popup
       v-model="searchGoodsdialog"
       position="bottom"
-      style="height: 90%; padding-top: 30px"
+      style="height: 90%; padding-top: 30px;overflow: hidden"
       closeable
       class="van-clearfix"
     >
-      <van-field
-        v-model="searchGoodsForm.keyWord"
-        @input="onInputSearchGoods"
-        center
-        label="关键字"
-        placeholder="按商品名称搜索"
-        size="large"
-        class="customSearchInput"
-        name="keyWord"
-      >
-      </van-field>
-      <!-- 商品列表 -->
-      <!-- <van-pull-refresh v-model="goodsRefreshing" @refresh="goodsOnRefresh"> -->
+      <div style="position:relative;overflow: hidden;">
+        <div style="position:absolute;top:0;width:100%;height:2rem">
+          <van-field
+            v-model="searchGoodsForm.keyWord"
+            @input="onInputSearchGoods"
+            center
+            label="关键字"
+            placeholder="按商品名称搜索"
+            size="large"
+            class="customSearchInput"
+            name="keyWord"
+          >
+          </van-field>
+        </div>
+
+        <!-- 商品列表 -->
+        <!-- <van-pull-refresh v-model="goodsRefreshing" @refresh="goodsOnRefresh"> -->
         <van-list
           v-model="goodsLoading"
           :finished="goodsFinished"
           finished-text="没有更多了"
           @load="goodsOnLoad"
         >
-          <div v-for="item in goodsList" :key="item.goods_id">
+          <div
+            v-for="item in goodsList"
+            :key="item.goods_id"
+            style="border-bottom: 1px solid #2c3e50;"
+          >
             <div @click="clickGoodsItem(item)">
               <div class="listIntroItem">
                 【{{ item.goods_brand }}】 {{ item.goods_name }} （{{
@@ -241,6 +276,8 @@
             </div>
           </div>
         </van-list>
+      </div>
+
       <!-- </van-pull-refresh> -->
     </van-popup>
   </div>
@@ -287,6 +324,7 @@ export default {
       //商品列表
       goodsList: [],
       currentGoods: null,
+      container: null,
       //待提交订单
       orders: [
         {
@@ -334,6 +372,22 @@ export default {
     }
   },
   methods: {
+    onLoad() {
+      // 异步更新数据
+      // setTimeout 仅做示例，真实场景中一般为 ajax 请求
+      // setTimeout(() => {
+      //   for (let i = 0; i < 10; i++) {
+      //     this.orders.push(this.orders[0]);
+      //   }
+      //   // 加载状态结束
+      //   this.loading = false;
+      //   // 数据全部加载完成
+      //   if (this.orders.length >= 40) {
+      //     this.finished = true;
+      //   }
+      // }, 1000);
+      // this.searchGoods();
+    },
     //添加盘点商品数据 打开
     addInventory() {
       this.dialogShow = true;
@@ -355,10 +409,20 @@ export default {
     //商品输入框获取焦点 打开商品搜索弹窗
     openSearchGoodsListDialog() {
       this.searchGoodsdialog = true;
-      this.searchGoods();
+      this.container = this.$refs.container;
+      // this.searchGoods();
     },
     onInputSearchGoods() {
       this.searchGoodsForm.pageNum = 1;
+      this.goodsList = [];
+      // this.goodsFinished = false;
+      // this.goodsLoading=true;
+
+      this.searchGoods();
+    },
+
+    goodsOnLoad() {
+      console.log("执行了");
       this.searchGoods();
     },
     //搜索商品
@@ -370,33 +434,24 @@ export default {
           this.searchGoodsForm.pageNum
         );
         console.log("搜索数据", res);
-        this.goodsList = res;
-
-        
+        this.goodsFinished = false;
+        if (res && res.length > 0) {
+          for (let i = 0; i < res.length; i++) {
+            this.goodsList.push(res[i]);
+          }
+        }
+        console.log("goodsList", this.goodsList);
         this.goodsLoading = false;
+        if (res.length < this.searchGoodsForm.pageSize) {
+          this.goodsFinished = true;
+          return;
+        }
+        this.searchGoodsForm.pageNum += 1;
+
         // this.goodsFinished = true;
       } catch (error) {
         console.log("error", error);
       }
-    },
-    onLoad() {
-      // 异步更新数据
-      // setTimeout 仅做示例，真实场景中一般为 ajax 请求
-      // setTimeout(() => {
-      //   for (let i = 0; i < 10; i++) {
-      //     this.orders.push(this.orders[0]);
-      //   }
-      //   // 加载状态结束
-      //   this.loading = false;
-      //   // 数据全部加载完成
-      //   if (this.orders.length >= 40) {
-      //     this.finished = true;
-      //   }
-      // }, 1000);
-    },
-    goodsOnLoad() {
-      console.log("执行了");
-      this.searchGoods();
     },
     //点击选择商品
     clickGoodsItem(goods) {
@@ -519,6 +574,8 @@ export default {
   }
 }
 .customSearchInput ::v-deep {
+  position: absolute;
+  top: 0;
   .van-field__control {
     font-size: 16px;
   }

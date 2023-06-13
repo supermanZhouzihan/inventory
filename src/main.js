@@ -21,7 +21,8 @@ import {
   Popup,
   DatetimePicker,
   SwipeCell,
-  List 
+  List,
+  Sticky
 } from 'vant';
 
 import ElementUI from 'element-ui';
@@ -54,6 +55,7 @@ Vue.use(Popup);
 Vue.use(DatetimePicker);
 Vue.use(SwipeCell);
 Vue.use(List);
+Vue.use(Sticky);
 Vue.use(Toast);
 Vue.use(Dialog);
 
