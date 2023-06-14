@@ -1,7 +1,7 @@
 // const {
 //   defineConfig
 // } = require('@vue/cli-service')
-const port = process.env.port || process.env.npm_config_port || 80 // 端口
+const port = process.env.port || process.env.npm_config_port || 8888 // 端口
 module.exports = {
   transpileDependencies: false,
   lintOnSave: false,

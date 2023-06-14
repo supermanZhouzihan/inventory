@@ -11,7 +11,7 @@
 <template>
   <div>
     <van-nav-bar
-      :title="userName"
+      :title="'工作台：' + userName"
       left-text="返回"
       left-arrow
       safe-area-inset-top
@@ -33,16 +33,20 @@
     >
 
     <van-field
-      v-model="keyWord"
+      v-model="orderParams.keyWords"
       center
       clearable
       label="关键字"
-      placeholder="按商品、货位索索"
+      placeholder="按商品、货位搜索"
       size="large"
       class="customSearchInput"
     >
       <template #button>
-        <van-button size="small" type="primary" style="width: 60px"
+        <van-button
+          size="small"
+          type="primary"
+          style="width: 60px"
+          @click="onSearchOrderList"
           >搜索</van-button
         >
       </template>
@@ -56,8 +60,9 @@
     >
       <van-swipe-cell
         v-for="item in orders"
-        :key="item.id"
+        :key="item.order_id"
         :before-close="beforeClose"
+        :name="item.order_id"
       >
         <div @click="clickItem(item)">
           <div class="listIntroItem">
@@ -77,36 +82,25 @@
         </div>
 
         <template #right>
-          <van-button square text="删除" type="danger" class="delete-button" />
+          <van-button
+            square
+            type="primary"
+            text="复制"
+            id="复制"
+            class="delete-button"
+            @click="copyOrder"
+          />
+          <van-button
+            square
+            text="删除"
+            type="danger"
+            id="删除"
+            class="delete-button"
+            @click="delOrder"
+          />
         </template>
       </van-swipe-cell>
     </van-list>
-
-    <!-- <van-list
-      v-model="goodsLoading"
-      :finished="goodsFinished"
-      finished-text="没有更多了"
-      @load="goodsOnLoad"
-    >
-      <div v-for="item in goodsList" :key="item.goods_id">
-        <div @click="clickGoodsItem(item)">
-          <div class="listIntroItem">
-            【{{ item.goods_brand }}】 {{ item.goods_name }} （{{
-              item.goods_spec
-            }}）
-          </div>
-          <div class="listIntroItem">
-            货位:{{ item.stock_location }}，生产日期：{{
-              item.pro_date
-            }}，有效期：{{ item.shelf_life_days }}天
-          </div>
-          <div class="listIntroItem">
-            数量：整{{ item.main_num }}{{ item.main_unit }},零{{ item.sub_num
-            }}{{ item.sub_unit }}
-          </div>
-        </div>
-      </div>
-    </van-list> -->
 
     <!-- 添加、编辑商品弹窗 -->
     <van-action-sheet
@@ -115,20 +109,22 @@
       :close-on-click-overlay="false"
     >
       <div class="content">
-        <van-form validate-first @failed="onFailed">
+        <van-form @failed="onFailed" @submit="onSubmit">
           <van-field
             v-model="form.goods_name"
             @focus="openSearchGoodsListDialog"
             name="goods_name"
             placeholder="商品名称"
-            label="规格"
+            label="商品"
             readonly
+            :rules="[{ required: true, message: '请选择商品' }]"
           />
           <van-field
-            v-model="form.locationNo"
-            name="locationNo"
+            v-model="form.stock_location"
+            name="stock_location"
             placeholder="货位"
             label="货位"
+            :rules="[{ required: true, message: '请输入货位' }]"
           />
           <!-- 通过 pattern 进行正则校验 -->
           <!-- :rules="[{ pattern, message: '请输入正确内容' }]" -->
@@ -153,45 +149,46 @@
                 <van-field
                   v-model="form.main_num"
                   name="main_num"
-                  placeholder="正则校验"
+                  placeholder="主单位"
                   label="整"
+                  :rules="[{ validator: numReg, message: '请输入正确的数量' }]"
                 >
                   <template #extra>
                     <span>{{ form.main_unit }}</span>
                   </template>
                 </van-field>
                 <van-field
-                  v-if="form.sub_unit"
                   v-model="form.sub_num"
                   name="sub_num"
-                  placeholder="正则校验"
+                  placeholder="辅单位"
                   label="零"
+                  :rules="[
+                    { validator: subUnitnumReg, message: '请输入正确的数量' },
+                  ]"
                 >
                   <template #extra>
-                    <span>{{ form.sub_unit }}</span>
+                    <span>{{ form.sub_unit ? form.sub_unit : "--" }}</span>
                   </template>
                 </van-field>
               </div>
               <!-- <van-tag type="danger">标签</van-tag> -->
             </template>
           </van-cell>
-          <van-cell
-            is-link
-            class="customDateCell"
-            @click="openDatePickerPopUp"
-            :value="form.pro_date"
-          >
-            <template #title>
-              <span class="custom-title">生产日期</span>
-              <!-- <van-tag type="danger">标签</van-tag> -->
-            </template>
-          </van-cell>
+          <van-field
+            v-model="form.pro_date"
+            @focus="openDatePickerPopUp"
+            name="pro_date"
+            placeholder="生产日期"
+            label="生产日期"
+            readonly
+            :rules="[{ required: true, message: '请选择生产日期' }]"
+          />
           <van-field
             v-model="form.shelf_life_days"
-            name="pattern"
-            placeholder="正则校验"
+            name="shelf_life_days"
+            placeholder="保质期"
             label="保质期"
-            readonly
+            :rules="[{ validator: numReg, message: '请输入正确的保质期' }]"
           >
             <template #extra>
               <span>天</span>
@@ -225,60 +222,60 @@
     <van-popup
       v-model="searchGoodsdialog"
       position="bottom"
-      style="height: 90%; padding-top: 30px;overflow: hidden"
+      style="height: 90%; padding-top: 30px; overflow: hidden"
       closeable
       class="van-clearfix"
+      :safe-area-inset-bottom="true"
     >
-      <div style="position:relative;overflow: hidden;">
-        <div style="position:absolute;top:0;width:100%;height:2rem">
+      <div class="popup_box">
+        <div class="popup_top">
           <van-field
-            v-model="searchGoodsForm.keyWord"
+            v-model="searchGoodsForm.keyWords"
             @input="onInputSearchGoods"
             center
             label="关键字"
             placeholder="按商品名称搜索"
             size="large"
             class="customSearchInput"
-            name="keyWord"
+            name="keyWords"
           >
           </van-field>
         </div>
 
-        <!-- 商品列表 -->
-        <!-- <van-pull-refresh v-model="goodsRefreshing" @refresh="goodsOnRefresh"> -->
-        <van-list
-          v-model="goodsLoading"
-          :finished="goodsFinished"
-          finished-text="没有更多了"
-          @load="goodsOnLoad"
-        >
-          <div
-            v-for="item in goodsList"
-            :key="item.goods_id"
-            style="border-bottom: 1px solid #2c3e50;"
+        <div class="popup_main">
+          <van-list
+            v-model="goodsLoading"
+            :finished="goodsFinished"
+            finished-text="没有更多了"
+            @load="goodsOnLoad"
+            style="padding-bottom: 40px"
           >
-            <div @click="clickGoodsItem(item)">
-              <div class="listIntroItem">
-                【{{ item.goods_brand }}】 {{ item.goods_name }} （{{
-                  item.goods_spec
-                }}）
-              </div>
-              <div class="listIntroItem">
-                货位:{{ item.stock_location }}，生产日期：{{
-                  item.pro_date
-                }}，有效期：{{ item.shelf_life_days }}天
-              </div>
-              <div class="listIntroItem">
-                数量：整{{ item.main_num }}{{ item.main_unit }},零{{
-                  item.sub_num
-                }}{{ item.sub_unit }}
+            <div
+              v-for="item in goodsList"
+              :key="item.goods_id"
+              style="border-bottom: 1px solid #2c3e50"
+            >
+              <div @click="clickGoodsItem(item)">
+                <div class="listIntroItem">
+                  【{{ item.goods_brand }}】 {{ item.goods_name }} （{{
+                    item.goods_spec
+                  }}）
+                </div>
+                <div class="listIntroItem">
+                  货位:{{ item.stock_location }}，生产日期：{{
+                    item.pro_date
+                  }}，有效期：{{ item.shelf_life_days }}天
+                </div>
+                <div class="listIntroItem">
+                  数量：整{{ item.main_num }}{{ item.main_unit }},零{{
+                    item.sub_num
+                  }}{{ item.sub_unit }}
+                </div>
               </div>
             </div>
-          </div>
-        </van-list>
+          </van-list>
+        </div>
       </div>
-
-      <!-- </van-pull-refresh> -->
     </van-popup>
   </div>
 </template>
@@ -288,11 +285,17 @@ import moment from "moment";
 import { Dialog } from "vant";
 import { initJsStore } from "@/service/idb_service";
 import { GoodsService } from "@/service/goods_service";
+import { OrderService } from "@/service/localOrder_service";
 export default {
   name: "Inventory",
   data() {
     return {
-      keyWord: "",
+      orderParams: {
+        keyWords: "",
+        pageSize: 20,
+        pageNum: 1,
+      },
+
       title: "",
       //   currentDate:this.$formatDate.nowFormat("YYYY-MM-DD"),
       loading: false,
@@ -303,49 +306,29 @@ export default {
       currentDate: new Date(),
       formTitle: "添加",
       userName: "",
+      btnStatus: "", //滑动时的按钮 1：copy 2：del
       form: {
         goods_name: "", //商品名称
         goods_spec: "", //规格
         goods_brand: "", //品牌name
         main_unit: "件", //主单位
         sub_unit: "袋", //辅单位
-        main_num: 0, //主单位数量
-        sub_num: 0, //辅单位数量
+        main_num: "", //主单位数量
+        sub_num: "", //辅单位数量
         stock_location: "",
         person: "", //操作人
         shelf_life_days: "", //保质期
         pro_date: "", //生产日期
       },
-      searchGoodsForm: { keyWord: "", pageSize: 10, pageNum: 1 },
+      searchGoodsForm: { keyWords: "", pageSize: 20, pageNum: 1 },
       dialogShow: false, //form表单弹窗
       datePickerPopUp: false, //日期选择弹窗
-      pattern: "/d{6}/",
       value1: "",
       //商品列表
       goodsList: [],
       currentGoods: null,
-      container: null,
       //待提交订单
-      orders: [
-        {
-          id: 132,
-          batch_no: "20230604",
-          goods_id: 123456,
-          goods_name: "测试商品",
-          goods_spec: "50袋/件",
-          goods_brand: "天宇",
-          pro_date: "2020-08-24",
-          shelf_life_days: 180,
-          main_unit: "件",
-          sub_unit: "袋",
-          main_num: "20",
-          sub_num: "30",
-          stock_location: "123456",
-          person: "cscs",
-          create_time: "2022-03-05",
-          update_time: "2022-03-05",
-        },
-      ],
+      orders: [],
     };
   },
   async beforeCreate() {
@@ -366,13 +349,15 @@ export default {
   mounted() {
     let userName = localStorage.getItem("userName");
     if (userName) {
-      this.userName = "工作台：" + userName;
+      this.userName = userName;
     } else {
       location.href = "/login";
     }
   },
   methods: {
     onLoad() {
+      this.searchOrders();
+
       // 异步更新数据
       // setTimeout 仅做示例，真实场景中一般为 ajax 请求
       // setTimeout(() => {
@@ -388,9 +373,70 @@ export default {
       // }, 1000);
       // this.searchGoods();
     },
+    //点击订单列表搜索按钮
+    onSearchOrderList() {
+      this.orderParams.pageNum = 1;
+      // this.orderParams.keyWords = "";
+      this.orders = [];
+      this.searchOrders();
+    },
+    async searchOrders() {
+      try {
+        let res = await new OrderService().getOrderByGoodsName(
+          this.orderParams.keyWords,
+          this.orderParams.pageSize,
+          this.orderParams.pageNum
+        );
+        console.log("搜索数据", res);
+        this.finished = false;
+        if (res && res.length > 0) {
+          for (let i = 0; i < res.length; i++) {
+            this.orders.push(res[i]);
+          }
+        }
+        console.log("orders", this.orders);
+        this.loading = false;
+        if (res.length < this.orderParams.pageSize) {
+          this.finished = true;
+          return;
+        }
+        this.orderParams.pageNum += 1;
+
+        // this.goodsFinished = true;
+      } catch (error) {
+        console.log("error", error);
+      }
+    },
+    //保存到本地数据库
+    async onSubmit(values) {
+      console.log("submit", values);
+      console.log(this.form, this.currentGoods);
+      let form = JSON.parse(JSON.stringify(values));
+      form.goods_id = this.form.goods_id;
+      form.main_unit = this.form.main_unit;
+      form.sub_unit = this.form.sub_unit;
+      form.person = this.userName;
+      if (this.form.order_id) {
+        form.order_id = this.form.order_id;
+      }
+      console.log("form===========", form);
+      try {
+        if (form.id) {
+          await new OrderService().updateOrder(form);
+        } else {
+          await new OrderService().addOrder(form);
+        }
+        this.dialogShow = false;
+        this.orderParams.keyWords = "";
+        this.onSearchOrderList();
+      } catch (error) {
+        console.log("error", error);
+      }
+    },
     //添加盘点商品数据 打开
     addInventory() {
       this.dialogShow = true;
+      this.formTitle = "添加";
       // this.
       this.form = {
         goods_name: "", //商品名称
@@ -398,8 +444,8 @@ export default {
         goods_brand: "", //品牌name
         main_unit: "件", //主单位
         sub_unit: "袋", //辅单位
-        main_num: 0, //主单位数量
-        sub_num: 0, //辅单位数量
+        main_num: "", //主单位数量
+        sub_num: "", //辅单位数量
         stock_location: "",
         person: "", //操作人
         shelf_life_days: "", //保质期
@@ -409,27 +455,21 @@ export default {
     //商品输入框获取焦点 打开商品搜索弹窗
     openSearchGoodsListDialog() {
       this.searchGoodsdialog = true;
-      this.container = this.$refs.container;
-      // this.searchGoods();
     },
     onInputSearchGoods() {
       this.searchGoodsForm.pageNum = 1;
       this.goodsList = [];
-      // this.goodsFinished = false;
-      // this.goodsLoading=true;
-
       this.searchGoods();
     },
 
     goodsOnLoad() {
-      console.log("执行了");
       this.searchGoods();
     },
     //搜索商品
     async searchGoods() {
       try {
         let res = await new GoodsService().getGoodsByGoodsName(
-          this.searchGoodsForm.keyWord,
+          this.searchGoodsForm.keyWords,
           this.searchGoodsForm.pageSize,
           this.searchGoodsForm.pageNum
         );
@@ -459,54 +499,30 @@ export default {
       this.form = this.currentGoods;
       this.searchGoodsdialog = false;
     },
+    //返回
     goBack() {
       this.$router.go(-1);
     },
+    //表单failed
     onFailed(err) {
       console.log(err);
     },
+    //点击时间选择 打开弹窗
     openDatePickerPopUp() {
       this.datePickerPopUp = true;
     },
     //时间选择 确认
     confirmDate(value) {
-      //    console.log(value)
-      this.form.producedDate = moment(value).format("YYYY-MM-DD");
+      this.form.pro_date = moment(value).format("YYYY-MM-DD");
       this.datePickerPopUp = false;
     },
     //日期选择 点击取消 关闭弹窗
     cancel() {
       this.datePickerPopUp = false;
     },
-    //下拉选择远程搜索
-    remoteMethod(query) {
-      console.log("query", query);
-      // if (query !== "") {
-      //   this.$nextTick(() => {
-      //     this.supplierParams.supplier_name = query;
-      //     this.supplierParams.page = 1;
-      //     this.getSupList();
-      //   });
-      // } else {
-      //   this.supplierParams.supplier_name = "";
-      //   this.$nextTick(() => {
-      //     this.getSupList();
-      //   });
-      // }
-    },
-    cancalReadOnly(onOff) {
-      this.$nextTick(() => {
-        if (!onOff) {
-          const { select } = this.$refs;
-          const input = select.$el.querySelector(".el-input__inner");
-          input.removeAttribute("readonly");
-        }
-      });
-    },
-    changeSelectGoods(val) {
-      console.log("changeVal", val);
-    },
-    beforeClose({ position, instance }) {
+
+    beforeClose({ name, position, instance }) {
+      console.log(name, position, instance);
       switch (position) {
         case "left":
         case "cell":
@@ -514,24 +530,55 @@ export default {
           instance.close();
           break;
         case "right":
-          Dialog.confirm({
-            message: "确定删除吗？",
-          })
-            .then(() => {
-              instance.close();
+          if (this.btnStatus == 1) {
+            instance.close();
+            
+          } else {
+            Dialog.confirm({
+              message: "确定删除吗？",
             })
-            .catch(() => {
-              instance.close();
-            });
+              .then(async () => {
+                try {
+                  let res = await new OrderService().removeOrder(name);
+                  console.log("删除数据", res);
+                  this.onSearchOrderList();
+                  instance.close();
+                } catch (error) {
+                  console.log("error", error);
+                }
+              })
+              .catch(() => {
+                instance.close();
+              });
+          }
+
           break;
       }
     },
 
-    //点击待提交的订单
+    //点击订单
     clickItem(e) {
       this.dialogShow = true;
       this.form = JSON.parse(JSON.stringify(e));
       this.formTitle = "编辑";
+    },
+    numReg(val) {
+      return /^[+]{0,1}(\d+)$|^[+]{0,1}(\d+\.\d+)$/.test(val);
+    },
+
+    subUnitnumReg(val) {
+      if (val === "") {
+        return true;
+      } else {
+        return /^[+]{0,1}(\d+)$|^[+]{0,1}(\d+\.\d+)$/.test(val);
+      }
+    },
+    copyOrder() {
+      this.btnStatus = 1;
+    },
+    delOrder() {
+      // console.log('del',e)
+      this.btnStatus = 2;
     },
   },
 };
@@ -574,8 +621,8 @@ export default {
   }
 }
 .customSearchInput ::v-deep {
-  position: absolute;
-  top: 0;
+  // position: absolute;
+  // top: 0;
   .van-field__control {
     font-size: 16px;
   }
@@ -583,5 +630,61 @@ export default {
 .listIntroItem {
   text-align: left;
   padding: 5px;
+}
+
+.popup_box {
+  height: 100%;
+  background-color: #fff;
+  padding-top: 40px;
+  padding-bottom: 40px;
+  overflow: hidden;
+  position: relative;
+  .popup_top {
+    width: 100%;
+    height: 40px;
+    position: absolute;
+    top: 0;
+    display: flex;
+    align-items: center;
+    .van-icon-cross {
+      font-size: 0.43rem;
+      color: #181818;
+      margin-left: 3.21rem;
+    }
+    .title {
+      margin-left: 4.15rem;
+      height: 0.43rem;
+      font-family: PingFangSC-Medium;
+      font-weight: 500;
+      font-size: 0.43rem;
+      color: #181818;
+      line-height: 0.43rem;
+    }
+  }
+  // .popup_bottom {
+  //   width: 10rem;
+  //   height: 1.31rem;
+
+  //   position: absolute;
+  //   bottom: 0;
+  //   display: flex;
+
+  //   .reset_btn {
+  //     width: 4rem;
+  //     height: 1.31rem;
+  //     background: #fff;
+  //   }
+  //   .confirm_btn {
+  //     width: 6rem;
+  //     height: 1.31rem;
+  //     background: #f84730;
+  //   }
+  // }
+  .popup_main {
+    height: 100%;
+    overflow-y: scroll;
+    // background-color: #fcf;
+    // margin-bottom: 40px;
+  }
 }
 </style>
