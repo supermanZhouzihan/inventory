@@ -6,7 +6,7 @@ export class OrderService {
         this.tableName = "Orders";
     }
     //获取order列表
-    getLocalOrderList() {
+    getAllLocalOrderList() {
         return connection.select({
             from: this.tableName,
         })
@@ -57,7 +57,7 @@ export class OrderService {
                 person:order.person
             },
             where: {
-                id: order.order_id
+                order_id: order.order_id
             }
         })
     }
@@ -69,6 +69,10 @@ export class OrderService {
                 order_id: order_id
             }
         })
+    }
+    //移除所有订单
+    removeAllOrder(){
+        return connection.clear(this.tableName)
     }
 
 }

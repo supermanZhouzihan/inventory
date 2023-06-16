@@ -60,6 +60,10 @@ export class GoodsService {
             }
         })
     }
+
+    removeAllGoods(){
+        return connection.clear(this.tableName)
+    }
     //更新商品
     // updateGoodsById(goods) {
     //     return connection.update({

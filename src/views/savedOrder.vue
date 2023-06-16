@@ -1,6 +1,6 @@
 <!-- 
- * @description: 盘点页面
- * @fileName: inventory.vue 
+ * @description: 已保存订单/远程服务器订单
+ * @fileName: savedOrder.vue 
  * @author: zhozihan 
  * @date: 2023-06-02 19:11:19 
  * @后台人员:  
@@ -18,22 +18,11 @@
       @click-left="goBack"
       style="margin-bottom: 10px"
     >
-      <!-- <template #right>
-        <van-icon name="search" size="18" />
-      </template> -->
     </van-nav-bar>
-    <div style="margin-bottom:10px">本地数据</div>
-    <van-button
-      type="primary"
-      icon="plus"
-      size="large"
-      style="width: 80%; margin-bottom: 20px"
-      @click="addInventory"
-      >添加</van-button
-    >
+    <div style="margin-bottom:10px">远程订单数据</div>
     <div style="display: flex; align-items: center; padding: 0 5px">
       <van-field
-        v-model="orderParams.keyWords"
+        v-model="orderParams.keyword"
         center
         clearable
         label="关键字"
@@ -51,24 +40,22 @@
       >
     </div>
 
-    <!-- 待提交的列表 -->
     <van-list
       v-model="loading"
       :finished="finished"
       finished-text="没有更多了"
-      @load="onLoad"
+      @load="listOnLoad"
     >
       <van-swipe-cell
         v-for="item in orders"
-        :key="item.order_id"
+        :key="item.id"
         :before-close="beforeClose"
-        :name="item.order_id"
+        :name="item.id"
       >
         <div @click="clickItem(item)" class="listItem">
           <div class="listIntroItem">
-            【{{ item.goods_brand }}】 {{ item.goods_name }} （{{
-              item.goods_spec
-            }}）
+            {{ item.goods_brand ? "【" + item.goods_brand + "】" : "" }}
+            {{ item.goods_name }} （{{ item.goods_spec }}）
           </div>
           <div class="listIntroItem">
             货位:{{ item.stock_location }}，生产日期：{{
@@ -84,19 +71,10 @@
         <template #right>
           <van-button
             square
-            type="primary"
-            text="复制"
-            id="复制"
-            class="delete-button"
-            @click="copyOrder"
-          />
-          <van-button
-            square
             text="删除"
             type="danger"
             id="删除"
             class="delete-button"
-            @click="delOrder"
           />
         </template>
       </van-swipe-cell>
@@ -110,7 +88,7 @@
     >
       <div class="content">
         <van-form @submit="onSubmit">
-          <van-field
+            <van-field
             v-model="form.stock_location"
             name="stock_location"
             placeholder="货位"
@@ -128,8 +106,6 @@
             readonly
             :rules="[{ required: true, message: '请选择商品' }]"
           />
-          <!-- 通过 pattern 进行正则校验 -->
-          <!-- :rules="[{ pattern, message: '请输入正确内容' }]" -->
           <van-field
             v-model="form.goods_spec"
             name="goods_spec"
@@ -152,8 +128,8 @@
                   v-model="form.main_num"
                   name="main_num"
                   placeholder="主单位"
-                  label="整"
                   required
+                  label="整"
                   :rules="[{ validator: numReg, message: '请输入正确的数量' }]"
                 >
                   <template #extra>
@@ -190,8 +166,8 @@
           <van-field
             v-model="form.shelf_life_days"
             name="shelf_life_days"
-            placeholder="保质期"
             required
+            placeholder="保质期"
             label="保质期"
             :rules="[{ validator: numReg, message: '请输入正确的保质期' }]"
           >
@@ -288,15 +264,16 @@ import moment from "moment";
 import { Dialog } from "vant";
 import { initJsStore } from "@/service/idb_service";
 import { GoodsService } from "@/service/goods_service";
-import { OrderService } from "@/service/localOrder_service";
+import axios from "axios";
+// import { OrderService } from "@/service/localOrder_service";
 export default {
-  name: "Inventory",
+  name: "savedOrder",
   data() {
     return {
       orderParams: {
-        keyWords: "",
-        pageSize: 20,
-        pageNum: 1,
+        keyword: "",
+        limit: 20,
+        page: 1,
       },
 
       title: "",
@@ -323,7 +300,7 @@ export default {
         shelf_life_days: "", //保质期
         pro_date: "", //生产日期
       },
-      searchGoodsForm: { keyWords: "", pageSize: 20, pageNum: 1 },
+      searchGoodsForm: { keyWords: "", limit: 20, page: 1 },
       dialogShow: false, //form表单弹窗
       datePickerPopUp: false, //日期选择弹窗
       value1: "",
@@ -350,6 +327,7 @@ export default {
     }
   },
   mounted() {
+    this.baseUrl = process.env.VUE_APP_BASE_API_PURCHASE;
     let userName = localStorage.getItem("userName");
     if (userName) {
       this.userName = userName;
@@ -358,105 +336,76 @@ export default {
     }
   },
   methods: {
-    onLoad() {
+    //触发条件:滚动条到底部一定距离、首次渲染自动触发
+    listOnLoad() {
       this.searchOrders();
-
-      // 异步更新数据
-      // setTimeout 仅做示例，真实场景中一般为 ajax 请求
-      // setTimeout(() => {
-      //   for (let i = 0; i < 10; i++) {
-      //     this.orders.push(this.orders[0]);
-      //   }
-      //   // 加载状态结束
-      //   this.loading = false;
-      //   // 数据全部加载完成
-      //   if (this.orders.length >= 40) {
-      //     this.finished = true;
-      //   }
-      // }, 1000);
-      // this.searchGoods();
     },
     //点击订单列表搜索按钮
     onSearchOrderList() {
-      this.orderParams.pageNum = 1;
+      this.orderParams.page = 1;
       // this.orderParams.keyWords = "";
       this.orders = [];
       this.searchOrders();
     },
     async searchOrders() {
-      try {
-        let res = await new OrderService().getOrderByGoodsName(
-          this.orderParams.keyWords,
-          this.orderParams.pageSize,
-          this.orderParams.pageNum
-        );
-        this.finished = false;
-        if (res && res.length > 0) {
-          for (let i = 0; i < res.length; i++) {
-            this.orders.push(res[i]);
-          }
-        }
-        this.loading = false;
-        if (res.length < this.orderParams.pageSize) {
-          this.finished = true;
-          return;
-        }
-        this.orderParams.pageNum += 1;
+      let url = this.baseUrl + "/api/stocktacking/getRecordList";
+      axios
+        .post(url, this.orderParams)
+        .then(({ data }) => {
+          this.finished = false;
+          console.log("返回数据", data.data.data);
+          let list = data.data.data;
 
-        // this.goodsFinished = true;
-      } catch (error) {
-        console.log("error", error);
-      }
+          if (list && list.length > 0) {
+            for (let i = 0; i < list.length; i++) {
+              this.orders.push(list[i]);
+            }
+          }
+          console.log("orders", this.orders);
+          this.loading = false;
+          if (list.length < this.orderParams.limit) {
+            this.finished = true;
+            return;
+          }
+          this.orderParams.page += 1;
+          // this.insertGoodsToDb(data.data);
+        })
+        .catch((err) => {
+          console.log("err", err);
+        });
     },
     //保存到本地数据库
     async onSubmit(values) {
-      let form = JSON.parse(JSON.stringify(values));
-      form.goods_id = this.form.goods_id;
-      form.main_unit = this.form.main_unit;
-      form.sub_unit = this.form.sub_unit;
-      form.person = this.userName;
-      if (this.form.order_id) {
-        form.order_id = this.form.order_id;
-      }
-      try {
-        if (form.order_id) {
-          await new OrderService().updateOrder(form);
-        } else {
-          await new OrderService().addOrder(form);
-        }
-        this.dialogShow = false;
-        this.orderParams.keyWords = "";
-        this.onSearchOrderList();
-      } catch (error) {
-        console.log("error", error);
-        alert("error", error);
-      }
-    },
-    //添加盘点商品数据 打开
-    addInventory() {
-      this.dialogShow = true;
-      this.formTitle = "添加";
-      // this.
-      this.form = {
-        goods_name: "", //商品名称
-        goods_spec: "", //规格
-        goods_brand: "", //品牌name
-        main_unit: "件", //主单位
-        sub_unit: "袋", //辅单位
-        main_num: "", //主单位数量
-        sub_num: "", //辅单位数量
-        stock_location: "",
-        person: "", //操作人
-        shelf_life_days: "", //保质期
-        pro_date: "", //生产日期
+      let listItem = JSON.parse(JSON.stringify(values));
+      listItem.goods_id = this.form.goods_id;
+      listItem.main_unit = this.form.main_unit;
+      listItem.sub_unit = this.form.sub_unit;
+      listItem.person = this.userName;
+
+      listItem.id = this.currentOrderId;
+
+      let params = {
+        is_update: true,
+        list: [listItem],
       };
+      let url = this.baseUrl + "/api/stocktacking/saveRecord";
+      axios
+        .post(url, params)
+        .then(() => {
+          this.dialogShow = false;
+          this.orderParams.keyword = "";
+          this.onSearchOrderList();
+        })
+        .catch((err) => {
+          console.log("err", err);
+        });
     },
     //商品输入框获取焦点 打开商品搜索弹窗
     openSearchGoodsListDialog() {
       this.searchGoodsdialog = true;
     },
     onInputSearchGoods() {
-      this.searchGoodsForm.pageNum = 1;
+      this.searchGoodsForm.page = 1;
       this.goodsList = [];
       this.searchGoods();
     },
@@ -469,8 +418,8 @@ export default {
       try {
         let res = await new GoodsService().getGoodsByGoodsName(
           this.searchGoodsForm.keyWords,
-          this.searchGoodsForm.pageSize,
-          this.searchGoodsForm.pageNum
+          this.searchGoodsForm.limit,
+          this.searchGoodsForm.page
         );
         this.goodsFinished = false;
         if (res && res.length > 0) {
@@ -479,13 +428,11 @@ export default {
           }
         }
         this.goodsLoading = false;
-        if (res.length < this.searchGoodsForm.pageSize) {
+        if (res.length < this.searchGoodsForm.limit) {
           this.goodsFinished = true;
           return;
         }
-        this.searchGoodsForm.pageNum += 1;
-
-        // this.goodsFinished = true;
+        this.searchGoodsForm.page += 1;
       } catch (error) {
         console.log("error", error);
       }
@@ -513,27 +460,8 @@ export default {
     cancel() {
       this.datePickerPopUp = false;
     },
-    copyOrderFunc() {
-      this.dialogShow = true;
-      this.formTitle = "添加";
-      this.form = {
-        goods_name: this.copyOrderForm.goods_name, //商品名称
-        goods_spec: this.copyOrderForm.goods_spec, //规格
-        goods_brand: this.copyOrderForm.goods_brand, //品牌name
-        main_unit: this.copyOrderForm.main_num, //主单位
-        sub_unit: this.copyOrderForm.sub_unit, //辅单位
-        main_num: this.copyOrderForm.main_num, //主单位数量
-        sub_num: this.copyOrderForm.sub_num, //辅单位数量
-        stock_location: this.copyOrderForm.stock_location, //货位
-        person: this.copyOrderForm.person, //操作人
-        shelf_life_days: this.copyOrderForm.shelf_life_days, //保质期
-        pro_date: this.copyOrderForm.pro_date, //生产日期
-        goods_id: this.copyOrderForm.goods_id, //goodsid
-      };
-    },
     beforeClose({ name, position, instance }) {
-      console.log(name, position, instance);
-      let order_id = name;
+      let id = name;
       switch (position) {
         case "left":
         case "cell":
@@ -541,35 +469,31 @@ export default {
           instance.close();
           break;
         case "right":
-          if (this.btnStatus == 1) {
-            //复制
-            let findItem = this.orders.find(
-              (item) => item.order_id == order_id
-            );
-            if (findItem) {
-              this.copyOrderForm = findItem;
-              this.copyOrderFunc();
-            }
-            instance.close();
-          } else {
-            //删除
-            Dialog.confirm({
-              message: "确定删除吗？",
-            })
-              .then(async () => {
-                try {
-                  let res = await new OrderService().removeOrder(order_id);
-                  console.log("删除数据", res);
-                  this.onSearchOrderList();
-                  instance.close();
-                } catch (error) {
-                  console.log("error", error);
-                }
-              })
-              .catch(() => {
+          //删除
+          Dialog.confirm({
+            message: "确定删除吗？",
+          })
+            .then(async () => {
+              try {
+                let url = this.baseUrl + "/api/stocktacking/deleteRecord";
+                axios
+                  .post(url, { id })
+                  .then(() => {
+                    this.dialogShow = false;
+                    this.orderParams.keyword = "";
+                    this.onSearchOrderList();
+                  })
+                  .catch((err) => {
+                    console.log("err", err);
+                  });
                 instance.close();
-              });
-          }
+              } catch (error) {
+                console.log("error", error);
+              }
+            })
+            .catch(() => {
+              instance.close();
+            });
 
           break;
       }
@@ -579,6 +503,7 @@ export default {
     clickItem(e) {
       this.dialogShow = true;
       this.form = JSON.parse(JSON.stringify(e));
+      this.currentOrderId = e.id;
       this.formTitle = "编辑";
     },
     numReg(val) {
@@ -591,13 +516,6 @@ export default {
       } else {
         return /^[+]{0,1}(\d+)$|^[+]{0,1}(\d+\.\d+)$/.test(val);
       }
-    },
-    copyOrder() {
-      this.btnStatus = 1;
-    },
-    delOrder() {
-      // console.log('del',e)
-      this.btnStatus = 2;
     },
   },
 };

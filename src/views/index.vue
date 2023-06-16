@@ -16,7 +16,7 @@
       left-arrow
       safe-area-inset-top
       @click-left="goBack"
-      style="margin-bottom: 30px"
+
     >
       <!-- <template #right>
         <van-icon name="search" size="18" />
@@ -30,7 +30,7 @@
       </template>
     </van-nav-bar> -->
 
-    <van-cell-group style="margin-bottom: 30px">
+    <van-cell-group style="margin-bottom: 100px">
       <van-cell value="" title-class="cellTitle" value-class="valueTitle">
         <!-- 使用 title 插槽来自定义标题 -->
         <template #title>
@@ -49,7 +49,7 @@
         <template #title>
           <span class="custom-title">待提交数据:{{ noSubmitNumber }}条</span>
           <van-button
-            @click="submitGoods"
+            @click="submitOrders"
             type="info"
             size="mini"
             style="width: 100px; font-size: 14px"
@@ -59,7 +59,7 @@
       </van-cell>
     </van-cell-group>
 
-    <van-cell
+    <!-- <van-cell
       class="mb20"
       title="货位预填入"
       value=""
@@ -90,7 +90,7 @@
         class="child customBtn"
         @click="addLocation"
       ></van-button>
-    </div>
+    </div> -->
 
     <van-button
       @click="goInventroy"
@@ -101,9 +101,19 @@
     >
       盘点
     </van-button>
+
+    <van-button
+      @click="goSavedOrder"
+      type="primary"
+      size="large"
+      style="width: 80%"
+    >
+      远程数据
+    </van-button>
+
     <!-- @confirm="locationDialogConfirm"
       @cancel="locationDialogCancel" -->
-    <van-dialog
+    <!-- <van-dialog
       v-model="locationDialogShow"
       :title="locationDialogTitle"
       show-cancel-button
@@ -111,7 +121,7 @@
       :before-close="beforeCloseDialog"
     >
       <div>货位号：<input type="text" v-model="locationForm.locationNo" /></div>
-    </van-dialog>
+    </van-dialog> -->
   </div>
 </template>
 
@@ -120,6 +130,7 @@ import axios from "axios";
 import { initJsStore } from "@/service/idb_service";
 // import { StudentService } from "@/service/student_service";
 import { GoodsService } from "@/service/goods_service";
+import { OrderService } from "@/service/localOrder_service";
 export default {
   data() {
     return {
@@ -132,8 +143,8 @@ export default {
       locationForm: {
         locationNo: "",
       },
-      students:[],
-      goodsList:[],
+      goodsList: [],
+      localOrder: [],
     };
   },
   async beforeCreate() {
@@ -158,53 +169,104 @@ export default {
     let localLocationList = localStorage.getItem("localLocationList")
       ? JSON.parse(localStorage.getItem("localLocationList"))
       : [];
-    console.log("localLocationList", localLocationList);
     if (userName) {
       this.userName = "工作台：" + userName;
     } else {
       location.href = "/login";
     }
     this.locationNoList = localLocationList;
-
-    this.initLocalGoodsData();
-    // this.testDb();
+    
+    this.initLocalOrderData(); //获取本地待提交订单数据
   },
   methods: {
-    // async testDb(){
-    //   this.goodsList = await new GoodsService().getGoodsList();
-    //   console.log(this.goodsList)
-    // },
     //初始化商品数据，存在本地数据库
     initLocalGoodsData() {
-      let baseUrl=process.env.VUE_APP_BASE_API_PURCHASE;
-      console.log(baseUrl);
-      let url=baseUrl+'/api/stocktacking/getAllGoods'
-      axios.get(url).then(( {data} ) => {
-        console.log('返回数据',data.data)
-
-        this.insertGoodsToDb(data.data);
-        // let uploadAuth = data.UploadAuth;
-        // let uploadAddress = data.UploadAddress;
-        // let videoId = data.VideoId;
-        // uploader.setUploadAuthAndAddress(
-        //   uploadInfo,
-        //   uploadAuth,
-        //   uploadAddress,
-        //   videoId
-        // );
+      this.$toast.loading({
+        message: "加载中...",
+        forbidClick: true, // 禁止背景点击
+        duration: 0, // 持续展示
       });
+      console.log("请求商品");
+      let baseUrl = process.env.VUE_APP_BASE_API_PURCHASE;
+      let url = baseUrl + "/api/stocktacking/getAllGoods";
+      axios
+        .get(url)
+        .then(async ({ data }) => {
+          await new GoodsService().removeAllGoods(); //清除本地数据库所有商品数据
+          this.insertGoodsToDb(data.data);
+        })
+        .catch(() => {
+          this.$toast.fail("数据同步失败，请稍后重试");
+        });
     },
-    async insertGoodsToDb(goods){
+    async insertGoodsToDb(goods) {
       this.goodsList = await new GoodsService().addMultiGoods(goods);
-      console.log('11',this.goodsList)
+      this.$toast.success("数据同步完成");
     },
     //提交未提交的盘库数据
-    submitGoods() {
-      
+    submitOrders() {
+      let list = JSON.parse(JSON.stringify(this.localOrder));
+      let submitList = [];
+      if (list && list.length > 0) {
+        list.map((item) => {
+          submitList.push({
+            goods_id: item.goods_id,
+            goods_name: item.goods_name,
+            goods_spec: item.goods_spec,
+            goods_brand: item.goods_brand,
+            pro_date: item.pro_date,
+            shelf_life_days: item.shelf_life_days,
+            main_unit: item.main_unit,
+            main_num: item.main_num,
+            sub_unit: item.sub_unit,
+            sub_num: item.sub_num,
+            stock_location: item.stock_location,
+            person: item.person,
+          });
+        });
+      } else {
+        this.$toast.fail({
+          message: "没有本地数据可提交",
+          forbidClick: true, // 禁止背景点击
+          duration: 1000, // 持续展示
+        });
+        return;
+      }
+      let params = {
+        list: submitList,
+      };
+      let baseUrl = process.env.VUE_APP_BASE_API_PURCHASE;
+      let url = baseUrl + "/api/stocktacking/saveRecord";
+
+      this.$toast.loading({
+        message: "加载中...",
+        forbidClick: true, // 禁止背景点击
+        duration: 0, // 持续展示
+      });
+      axios.post(url, params).then(async () => {
+        try{
+          await new OrderService().removeAllOrder();
+          this.initLocalOrderData();
+          this.$toast.success("操作成功");
+        }
+        catch (err){
+          this.$toast.fail("提交失败");
+        }
+      });
+    },
+    //初始化订单
+    async initLocalOrderData() {
+      try {
+        let res = await new OrderService().getAllLocalOrderList();
+        this.localOrder = res;
+        this.noSubmitNumber = res.length;
+      } catch (error) {
+        console.log("error", error);
+        this.$toast.fail("本地订单初始化失败");
+      }
     },
     //修改货位
     editLocation(item, index) {
-      console.log("修改", item);
       this.locationDialogShow = true;
       this.locationDialogTitle = "编辑货位";
       this.locationForm.locationNo = item.locationNo;
@@ -218,51 +280,47 @@ export default {
       this.locationForm.locationNo = "";
     },
     //删除货位
-    delLocation(item, index) {
-      this.$dialog
-        .alert({
-          title: "提示",
-          message: "是否要删除" + item.locationNo + "这条货位数据？",
-          showCancelButton: true,
-        })
-        .then((res) => {
-          this.locationNoList.splice(index, 1);
-          localStorage.setItem(
-            "localLocationList",
-            JSON.stringify(this.locationNoList)
-          );
-          console.log("res", res);
-        })
-        .catch((err) => {
-          console.log("err", err);
-        });
-      console.log(item);
-    },
-    beforeCloseDialog(action, done) {
-      if (action == "confirm") {
-        if (!this.locationForm.locationNo) {
-          this.$toast("货位号不能为空");
-          done(false);
-          return;
-        }
-        //编辑
-        if (this.currentIndex !== null) {
-          this.locationNoList[this.currentIndex].locationNo =
-            this.locationForm.locationNo;
-        }
-        //新增
-        else {
-          this.locationNoList.push({
-            locationNo: this.locationForm.locationNo,
-          });
-        }
-        localStorage.setItem(
-          "localLocationList",
-          JSON.stringify(this.locationNoList)
-        );
-      }
-      done();
-    },
+    // delLocation(item, index) {
+    //   this.$dialog
+    //     .alert({
+    //       title: "提示",
+    //       message: "是否要删除" + item.locationNo + "这条货位数据？",
+    //       showCancelButton: true,
+    //     })
+    //     .then(() => {
+    //       this.locationNoList.splice(index, 1);
+    //       localStorage.setItem(
+    //         "localLocationList",
+    //         JSON.stringify(this.locationNoList)
+    //       );
+    //     })
+    //     .catch(() => {});
+    // },
+    // beforeCloseDialog(action, done) {
+    //   if (action == "confirm") {
+    //     if (!this.locationForm.locationNo) {
+    //       this.$toast("货位号不能为空");
+    //       done(false);
+    //       return;
+    //     }
+    //     //编辑
+    //     if (this.currentIndex !== null) {
+    //       this.locationNoList[this.currentIndex].locationNo =
+    //         this.locationForm.locationNo;
+    //     }
+    //     //新增
+    //     else {
+    //       this.locationNoList.push({
+    //         locationNo: this.locationForm.locationNo,
+    //       });
+    //     }
+    //     localStorage.setItem(
+    //       "localLocationList",
+    //       JSON.stringify(this.locationNoList)
+    //     );
+    //   }
+    //   done();
+    // },
     goBack() {
       this.$router.push({
         name: "Login",
@@ -276,6 +334,11 @@ export default {
       // }
       this.$router.push({
         name: "Inventory",
+      });
+    },
+    goSavedOrder() {
+      this.$router.push({
+        name: "savedOrder",
       });
     },
     //货位点击确定
@@ -351,5 +414,6 @@ export default {
   height: 200px;
   border-radius: 50%;
   font-size: 30px;
+  margin-bottom: 60px;
 }
 </style>
