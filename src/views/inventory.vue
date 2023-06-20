@@ -70,12 +70,12 @@
               item.goods_spec
             }}）
           </div>
-          <div class="listIntroItem">
+          <div class="listIntroItem introText">
             货位:{{ item.stock_location }}，生产日期：{{
               item.pro_date
             }}，有效期：{{ item.shelf_life_days }}天
           </div>
-          <div class="listIntroItem">
+          <div class="listIntroItem introText">
             数量：整{{ item.main_num }}{{ item.main_unit }},零{{ item.sub_num
             }}{{ item.sub_unit }}
           </div>
@@ -436,20 +436,9 @@ export default {
     addInventory() {
       this.dialogShow = true;
       this.formTitle = "添加";
-      // this.
-      this.form = {
-        goods_name: "", //商品名称
-        goods_spec: "", //规格
-        goods_brand: "", //品牌name
-        main_unit: "件", //主单位
-        sub_unit: "袋", //辅单位
-        main_num: "", //主单位数量
-        sub_num: "", //辅单位数量
-        stock_location: "",
-        person: "", //操作人
-        shelf_life_days: "", //保质期
-        pro_date: "", //生产日期
-      };
+      if(this.form.order_id){
+        delete this.form['order_id']
+      }
     },
     //商品输入框获取焦点 打开商品搜索弹窗
     openSearchGoodsListDialog() {
@@ -493,7 +482,24 @@ export default {
     //点击选择商品
     clickGoodsItem(goods) {
       this.currentGoods = JSON.parse(JSON.stringify(goods));
-      this.form = this.currentGoods;
+      // goods_name: "", //商品名称
+      //   goods_spec: "", //规格
+      //   goods_brand: "", //品牌name
+      //   main_unit: "件", //主单位
+      //   sub_unit: "袋", //辅单位
+      //   main_num: "", //主单位数量
+      //   sub_num: "", //辅单位数量
+      //   stock_location: "",
+      //   person: "", //操作人
+      //   shelf_life_days: "", //保质期
+      //   pro_date: "", //生产日期
+      this.form.goods_name = this.currentGoods.goods_name;
+      this.form.goods_spec=this.currentGoods.goods_spec;
+      this.form.goods_brand=this.currentGoods.goods_brand;
+      this.form.main_unit=this.currentGoods.main_unit;
+      this.form.sub_unit=this.currentGoods.sub_unit;
+      this.form.goods_id=this.currentGoods.goods_id;
+
       this.searchGoodsdialog = false;
     },
     //返回
@@ -559,7 +565,6 @@ export default {
               .then(async () => {
                 try {
                   let res = await new OrderService().removeOrder(order_id);
-                  console.log("删除数据", res);
                   this.onSearchOrderList();
                   instance.close();
                 } catch (error) {
@@ -652,6 +657,9 @@ export default {
 .listIntroItem {
   text-align: left;
   padding: 5px;
+}
+.introText{
+  color:#969799
 }
 
 .popup_box {

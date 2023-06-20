@@ -166,17 +166,26 @@ export default {
     let userName = localStorage.getItem("userName")
       ? localStorage.getItem("userName")
       : "";
-    let localLocationList = localStorage.getItem("localLocationList")
-      ? JSON.parse(localStorage.getItem("localLocationList"))
-      : [];
+    let goodsListLength = localStorage.getItem("goodsListLength");
+    // let localLocationList = localStorage.getItem("localLocationList")
+    //   ? JSON.parse(localStorage.getItem("localLocationList"))
+    //   : [];
+
+    
     if (userName) {
       this.userName = "工作台：" + userName;
     } else {
       location.href = "/login";
     }
-    this.locationNoList = localLocationList;
+    // this.locationNoList = localLocationList;
+
+
     
     this.initLocalOrderData(); //获取本地待提交订单数据
+    //初始化商品数据
+    if(!goodsListLength){
+       this.initLocalGoodsData();
+    }
   },
   methods: {
     //初始化商品数据，存在本地数据库
@@ -186,7 +195,6 @@ export default {
         forbidClick: true, // 禁止背景点击
         duration: 0, // 持续展示
       });
-      console.log("请求商品");
       let baseUrl = process.env.VUE_APP_BASE_API_PURCHASE;
       let url = baseUrl + "/api/stocktacking/getAllGoods";
       axios
@@ -201,6 +209,7 @@ export default {
     },
     async insertGoodsToDb(goods) {
       this.goodsList = await new GoodsService().addMultiGoods(goods);
+      localStorage.setItem("goodsListLength",this.goodsList.length);
       this.$toast.success("数据同步完成");
     },
     //提交未提交的盘库数据
@@ -261,7 +270,6 @@ export default {
         this.localOrder = res;
         this.noSubmitNumber = res.length;
       } catch (error) {
-        console.log("error", error);
         this.$toast.fail("本地订单初始化失败");
       }
     },

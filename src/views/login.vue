@@ -53,7 +53,6 @@ export default {
       this.$router.push({
         name:'Index'
       })
-      console.log(this.userName);
     },
   },
 };

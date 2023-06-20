@@ -20,6 +20,7 @@
     >
     </van-nav-bar>
     <div style="margin-bottom:10px">远程订单数据</div>
+    <van-sticky>
     <div style="display: flex; align-items: center; padding: 0 5px">
       <van-field
         v-model="orderParams.keyword"
@@ -39,6 +40,7 @@
         >搜索</van-button
       >
     </div>
+    </van-sticky>
 
     <van-list
       v-model="loading"
@@ -57,14 +59,17 @@
             {{ item.goods_brand ? "【" + item.goods_brand + "】" : "" }}
             {{ item.goods_name }} （{{ item.goods_spec }}）
           </div>
-          <div class="listIntroItem">
+          <div class="listIntroItem introText">
             货位:{{ item.stock_location }}，生产日期：{{
               item.pro_date
             }}，有效期：{{ item.shelf_life_days }}天
           </div>
-          <div class="listIntroItem">
+          <div class="listIntroItem introText">
             数量：整{{ item.main_num }}{{ item.main_unit }},零{{ item.sub_num
             }}{{ item.sub_unit }}
+          </div>
+          <div class="listIntroItem introText">
+            操作人：{{item.person}}，{{item.update_time}}
           </div>
         </div>
 
@@ -353,7 +358,6 @@ export default {
         .post(url, this.orderParams)
         .then(({ data }) => {
           this.finished = false;
-          console.log("返回数据", data.data.data);
           let list = data.data.data;
 
           if (list && list.length > 0) {
@@ -361,7 +365,6 @@ export default {
               this.orders.push(list[i]);
             }
           }
-          console.log("orders", this.orders);
           this.loading = false;
           if (list.length < this.orderParams.limit) {
             this.finished = true;
@@ -570,6 +573,9 @@ export default {
 .listIntroItem {
   text-align: left;
   padding: 5px;
+}
+.introText{
+  color:#969799
 }
 
 .popup_box {
