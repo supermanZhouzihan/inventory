@@ -1,14 +1,13 @@
 module.exports = {
-  
+  presets: [
+    '@vue/cli-plugin-babel/preset',
+  ],
   plugins: [
     ['import', {
       libraryName: 'vant',
       libraryDirectory: 'es',
-      style: true,
+      style: true
     }, 'vant'],
-  ],
-  presets: [
-    '@vue/cli-plugin-babel/preset'
+    ["@babel/plugin-transform-modules-commonjs", { "allowTopLevelThis": true }]
   ]
-  
 }
